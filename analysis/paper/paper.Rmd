@@ -1,0 +1,199 @@
+---
+title: "Title Goes Here"
+author:
+  - Author One
+  - Author Two
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+    bookdown::html_document2:
+      fig_caption: yes
+      reference_docx: "../templates/template.docx" # Insert path for the DOCX file
+bibliography: references.bib
+csl: "../templates/journal-of-archaeological-science.csl" # Insert path for the bib-style
+abstract: |
+  Text of abstract
+keywords: |
+  keyword 1; keyword 2; keyword 3
+highlights: |
+  These are the highlights. 
+---
+
+
+<!-- This is the format for text comments that will be ignored during renderings. Do not put R code in these comments because it will not be ignored. -->
+
+
+```{r, setup, echo = FALSE, message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  echo = FALSE,
+  cache = FALSE,
+  comment = "#>",
+  fig.path = "../figures/"
+)
+
+library(ggrepel)
+library(tidyverse)
+library(glue)
+library(tidytext)
+library(scales)
+library(ggpmisc)
+library(Hmisc)
+```
+
+
+
+```{r top-archaeology-journals-by-citations-of-r}
+
+# Data are from an 'advanced search' of apps.webofknowledge.com using WC=Archaeology on apps.webofknowledge.com.
+
+# Results: 44,047
+# (from Web of Science Core Collection)
+# You searched for: (WC=Archaeology) AND LANGUAGE: (English) AND DOCUMENT TYPES: # (Article)
+# Timespan: 1900-2018. Indexes: SCI-EXPANDED, SSCI, A&HCI, ESCI
+
+#- get journals with the most number of articles
+
+archy_files <- 
+    list.files(here::here("/analysis/data/raw_data/wos_archaeology/"),
+               full.names = TRUE)
+
+archy_all_years <- 
+  map(archy_files,
+      ~readr::read_tsv(.x, 
+                       quote = "",
+                       col_types = cols(.default = col_character()))) %>% 
+  bind_rows() %>% 
+  mutate(PY = as.numeric(PY)) %>% 
+  filter(PY <= 2017)
+
+# limit to top journals
+top_journals_for_archy<- 
+  archy_all_years %>% 
+  group_by(SO) %>% 
+  tally(sort = TRUE)
+
+# n articles in top journals per year
+top_journals_for_archy_per_year <- 
+  archy_all_years %>% 
+  group_by(SO, PY) %>% 
+  tally() %>% 
+  arrange(PY)
+
+how_many_articles_in_top_archy_journals <- 
+  sum(top_journals_for_archy$n)
+
+#-- get articles citing R that are archaeology
+
+# Results: 137
+# (from Web of Science Core Collection)
+# You searched for: CITED AUTHOR: ("R DEV COR TEAM" OR "R CORE" OR "R CORE TEAM" OR "R DEVELOPMENT CORE TEAM")
+# Refined by: WEB OF SCIENCE CATEGORIES: ( ANTHROPOLOGY ) AND WEB OF SCIENCE CATEGORIES: ( ARCHAEOLOGY )
+# Timespan: All years. Indexes: SCI-EXPANDED, SSCI, A&HCI, ESCI
+
+archy_cran_files <- 
+      list.files(here::here("/analysis/data/raw_data/cited_cran_archaeology/"),
+               full.names = TRUE)
+
+archy_cran_all_years <- 
+  map(archy_cran_files,
+      ~readr::read_tsv(.x, 
+                       quote = "",
+                       col_types = cols(.default = col_character()))) %>% 
+  bind_rows() %>% 
+  mutate(PY = as.numeric(PY)) %>% 
+  filter(PY <= 2017)
+
+# tally by year
+archy_cran_cites_all_areas_top_journals_by_year <- 
+  archy_cran_all_years %>% 
+  filter(SO %in% top_journals_for_archy$SO) %>% 
+  group_by(SO, PY) %>% 
+  tally(sort = TRUE)  %>% 
+  left_join(top_journals_for_archy_per_year,
+            by = c('SO', 'PY')) %>% 
+   mutate(prop = n.x / n.y) %>% 
+  ungroup() 
+
+total_number_archaeology_articles_citing_r <- sum(archy_cran_cites_all_areas_top_journals_by_year$n.x)
+
+# check for slight differences in journal names
+# sort(unique(archy_cran_cites_all_areas_top_journals_by_year$SO))
+
+# nice labels with n for plot
+archy_cran_cites_all_areas_top_journals_by_year <- 
+archy_cran_cites_all_areas_top_journals_by_year %>% 
+  group_by(SO) %>% 
+  summarise(total_n_articles = sum(n.x)) %>% 
+  mutate(SO_n = as.character(glue('{SO} (n = {total_n_articles})'))) %>% 
+  right_join(archy_cran_cites_all_areas_top_journals_by_year,
+             by = "SO")
+
+```
+
+```{r j-arch-sci-articles-citing-R}
+# look at the trend in JAS, where there are the most articles
+
+how_many_articles_in_jas <-  
+  archy_cran_cites_all_areas_top_journals_by_year$total_n_articles[1]
+
+  
+jas_cites_r <- 
+archy_cran_cites_all_areas_top_journals_by_year %>% 
+  filter(SO == "JOURNAL OF ARCHAEOLOGICAL SCIENCE") %>% 
+  ggplot(aes(PY,
+           prop)) +
+  geom_point(size = 6) +
+  geom_smooth(method = "lm",
+              se = FALSE) +
+  scale_x_continuous(breaks = pretty_breaks( n = 10)) +
+  stat_poly_eq(aes(label =  paste(..eq.label.., 
+                                  ..adj.rr.label..,
+                                  sep = "~~~~")),
+               formula = y~x, 
+               parse = TRUE,
+               size = 7,
+               label.y.npc = 0.7) +
+  stat_fit_glance(label.y.npc = 0.7,
+                  size = 7,
+                  method = "lm", 
+                  method.args = list(formula = y ~ x),
+                  geom = "text",
+                  aes(label = paste("p-value: ",
+                                    signif(..p.value.., 
+                                           digits = 4)))) +
+  xlab("Publication year") +
+  ylab("Proportion of articles citing R")  +
+  theme_bw(base_size = 16)
+```
+ 
+There are `r how_many_articles_in_jas` articles in JAS that cite R. The proportion of articles published each year that cite R has been steadily increasing over time. 
+
+# Acknowledgements
+
+<!-- The following line inserts a page break when the output is MS Word. For page breaks in PDF, use \newpage on its own line.  -->
+##### pagebreak
+
+# References 
+<!-- The following line ensures the references appear here for the MS Word or HTML output files, rather than right at the end of the document (this will not work for PDF files):  -->
+<div id="refs"></div>
+
+##### pagebreak
+
+### Colophon
+
+This report was generated on `r Sys.time()` using the following computational environment and dependencies: 
+
+```{r colophon, cache = FALSE}
+# which R packages and versions?
+devtools::session_info()
+```
+
+The current Git commit details are:
+
+```{r}
+# what commit is this file at? You may need to change the path value
+# if your Rmd is not in analysis/paper/
+git2r::repository("../..")
+```
