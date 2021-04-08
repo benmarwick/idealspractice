@@ -56,7 +56,7 @@ library(Hmisc)
 #- get journals with the most number of articles
 
 archy_files <- 
-    list.files(here::here("/analysis/data/raw_data/wos_archaeology/"),
+    list.files(here::here("analysis/data/raw_data/wos_archaeology/"),
                full.names = TRUE)
 
 archy_all_years <- 
@@ -93,7 +93,7 @@ how_many_articles_in_top_archy_journals <-
 # Timespan: All years. Indexes: SCI-EXPANDED, SSCI, A&HCI, ESCI
 
 archy_cran_files <- 
-      list.files(here::here("/analysis/data/raw_data/cited_cran_archaeology/"),
+      list.files(here::here("analysis/data/raw_data/cited_cran_archaeology/"),
                full.names = TRUE)
 
 archy_cran_all_years <- 
@@ -138,8 +138,7 @@ archy_cran_cites_all_areas_top_journals_by_year %>%
 how_many_articles_in_jas <-  
   archy_cran_cites_all_areas_top_journals_by_year$total_n_articles[1]
 
-  
-jas_cites_r <- 
+  jas_cites_r <- 
 archy_cran_cites_all_areas_top_journals_by_year %>% 
   filter(SO == "JOURNAL OF ARCHAEOLOGICAL SCIENCE") %>% 
   ggplot(aes(PY,
@@ -154,8 +153,9 @@ archy_cran_cites_all_areas_top_journals_by_year %>%
                formula = y~x, 
                parse = TRUE,
                size = 7,
-               label.y.npc = 0.7) +
-  stat_fit_glance(label.y.npc = 0.7,
+               label.y = 0.85) +
+  stat_fit_glance(label.y = 0.05,
+                  label.x = 2012,
                   size = 7,
                   method = "lm", 
                   method.args = list(formula = y ~ x),
@@ -166,6 +166,11 @@ archy_cran_cites_all_areas_top_journals_by_year %>%
   xlab("Publication year") +
   ylab("Proportion of articles citing R")  +
   theme_bw(base_size = 16)
+  
+ggsave(here::here("analysis/figures/fig-1.png"),
+       h = 5, 
+       w = 8, 
+       dpi = 1000)
 ```
  
 There are `r how_many_articles_in_jas` articles in JAS that cite R. The proportion of articles published each year that cite R has been steadily increasing over time. 
